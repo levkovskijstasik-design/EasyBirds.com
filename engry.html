@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Easy Союз: Full Version</title>
+    <style>
+        body { margin: 0; background: #050505; overflow: hidden; font-family: 'Arial', sans-serif; }
+        #ui { position: absolute; top: 20px; left: 20px; z-index: 100; pointer-events: none; color: #ffcc00; text-shadow: 2px 2px #000; font-weight: bold; }
+        .stats { font-size: 28px; }
+        
+        #shop-trigger { 
+            position: absolute; bottom: 30px; left: 20px; z-index: 150;
+            padding: 15px 30px; background: #c2185b; color: #fff; 
+            border: 2px solid #fff; border-radius: 10px; font-weight: bold; cursor: pointer;
+        }
+        
+        #menu { 
+            position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+            background: rgba(15, 15, 25, 0.98); border: 4px solid #00e5ff; padding: 20px; 
+            display: none; grid-template-columns: 1fr 1fr; gap: 12px; z-index: 500; border-radius: 20px;
+            width: 380px; box-shadow: 0 0 30px rgba(0, 229, 255, 0.3);
+        }
+        .item { background: #1a1a2e; padding: 12px; color: #fff; text-align: center; border-radius: 10px; border: 1px solid #00e5ff; }
+        .item button { width: 100%; background: #2e7d32; color: #fff; border: none; padding: 10px; margin-top: 8px; cursor: pointer; border-radius: 5px; }
+        .special { grid-column: span 2; background: #001a33; border: 2px solid #00e5ff; }
+        .close-btn { grid-column: span 2; background: #444 !important; color: white; padding: 10px; cursor: pointer; border:none; border-radius: 5px; }
+    </style>
+</head>
+<body>
+
+<div id="ui">
+    <div class="stats">ОЧКИ: <span id="score-val">0</span> | УРОВЕНЬ: <span id="lvl-val">1</span></div>
+</div>
+
+<button id="shop-trigger" onclick="toggleShop()">МАГАЗИН</button>
+
+<div id="menu">
+    <div class="item">🪵 Здание <button onclick="buy('tower', 1000)">1000</button></div>
+    <div class="item">🐹 Хомяк <button onclick="buy('hamster', 500)">500</button></div>
+    <div class="item">💄 Помада <button onclick="buy('lipstick', 2000)">2000</button></div>
+    <div class="item">☢️ ЯДЕРКА <button onclick="buy('nuke', 5000)">5000</button></div>
+    <div class="item special">🏙️ ПОСТРОИТЬ ГОРОД <button onclick="buy('city', 5000)">5000</button></div>
+    <div class="item special">💻 КОМПЬЮТЕР (ВЗЛОМ) <button onclick="buy('pc', 0)">БЕСПЛАТНО</button></div>
+    <button class="close-btn" onclick="toggleShop()">ЗАКРЫТЬ</button>
+</div>
+
+<canvas id="game"></canvas>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let w, h, groundY, score = 0, level = 1, ammoType = 'ball';
+let blocks = [], hamsters = [];
+
+function resize() { w = canvas.width = window.innerWidth; h = canvas.height = window.innerHeight; groundY = h - 60; }
+window.onresize = resize; resize();
+
+let ball = { x: 200, y: 0, vx: 0, vy: 0, r: 15, active: false, grab: false };
+
+function toggleShop() { const m = document.getElementById('menu'); m.style.display = m.style.display === 'grid' ? 'none' : 'grid'; }
+
+function spawnTower(x, height = 3) {
+    let lastY = groundY;
+    for(let i=0; i < height; i++) {
+        let baseY = groundY - (i+1)*75;
+        blocks.push({x: x, y: baseY, w: 20, h: 70, ok: true, vx: 0, vy: 0, a: 0});
+        blocks.push({x: x+60, y: baseY, w: 20, h: 70, ok: true, vx: 0, vy: 0, a: 0});
+        let roof = {x: x-5, y: baseY-15, w: 90, h: 20, ok: true, vx: 0, vy: 0, a: 0};
+        blocks.push(roof);
+        lastY = roof.y;
+    }
+    return {x: x + 40, y: lastY - 22};
+}
+
+function initLevel() {
+    blocks = []; hamsters = [];
+    let p = spawnTower(w/2 + 100, 2 + Math.floor(Math.random()*2));
+    hamsters.push({x: p.x, y: p.y, r: 22, alive: true, vx: 0, vy: 0, a: 0});
+}
+
+function buy(type, cost) {
+    if (score >= cost || type === 'pc') {
+        if (type !== 'pc') score -= cost;
+        if (type === 'pc') score += 100000;
+        if (type === 'lipstick') ammoType = 'lipstick';
+        if (type === 'city') {
+            for(let i=0; i<4; i++) {
+                let p = spawnTower(400 + i*180, 2 + Math.floor(Math.random()*3));
+                hamsters.push({x: p.x, y: p.y, r: 22, alive: true, vx: 0, vy: 0, a: 0});
+            }
+        }
+        if (type === 'tower') spawnTower(Math.random()*(w-400)+300);
+        if (type === 'hamster') hamsters.push({x: w-200, y: 0, r: 22, alive: true, vx: 0, vy: 0, a: 0});
+        if (type === 'nuke') { hamsters.forEach(h => h.alive = false); blocks.forEach(b => b.ok = false); }
+    }
+}
+
+initLevel();
+
+function update() {
+    document.getElementById('score-val').innerText = score;
+    document.getElementById('lvl-val').innerText = level;
+
+    if (ball.active) {
+        ball.x += ball.vx; ball.y += ball.vy; ball.vy += 0.35;
+        blocks.forEach(b => {
+            if (b.ok && ball.x + ball.r > b.x && ball.x - ball.r < b.x + b.w && ball.y + ball.r > b.y && ball.y - ball.r < b.y + b.h) {
+                b.ok = false; b.vx = ball.vx * 0.5; b.vy = ball.vy * 0.3; score += 20;
+            }
+        });
+        hamsters.forEach(h => {
+            if (h.alive && Math.hypot(ball.x - h.x, ball.y - h.y) < ball.r + h.r) {
+                h.alive = false; h.vx = ball.vx; h.vy = -5; score += 500;
+                setTimeout(() => { level++; initLevel(); }, 1000);
+            }
+        });
+        if (ball.y > h + 100 || ball.x > w + 100) ball.active = false;
+    } else if (!ball.grab) { ball.x = 200; ball.y = groundY - 100; }
+
+    blocks.forEach(b => {
+        let supported = b.y + b.h >= groundY || blocks.some(o => o !== b && o.ok && Math.abs(b.x - o.x) < 60 && Math.abs((b.y+b.h) - o.y) < 10);
+        if (!supported || !b.ok) { b.vy += 0.7; b.y += b.vy; b.x += b.vx; b.a += b.vx * 0.05; }
+    });
+
+    hamsters.forEach(h => {
+        let onBlock = blocks.find(b => b.ok && h.x > b.x && h.x < b.x+b.w && Math.abs((h.y+h.r) - b.y) < 20);
+        if (onBlock && h.alive) { h.y = onBlock.y - h.r; h.vy = 0; }
+        else if (h.y + h.r < groundY) { h.vy += 0.7; h.y += h.vy; h.x += h.vx; h.a += h.vx * 0.1; }
+        else { h.y = groundY - h.r; h.vy = 0; }
+    });
+}
+
+function draw() {
+    ctx.fillStyle = '#050505'; ctx.fillRect(0,0,w,h);
+    ctx.fillStyle = '#1b5e20'; ctx.fillRect(0, groundY, w, 60);
+
+    blocks.forEach(b => {
+        ctx.save(); ctx.translate(b.x+b.w/2, b.y+b.h/2); ctx.rotate(b.a);
+        ctx.fillStyle = '#795548'; ctx.fillRect(-b.w/2, -b.h/2, b.w, b.h);
+        ctx.restore();
+    });
+
+    hamsters.forEach(h => {
+        ctx.save(); ctx.translate(h.x, h.y); ctx.rotate(h.a);
+        ctx.fillStyle = "#5d4037"; ctx.beginPath(); ctx.arc(-15, -15, 10, 0, 7); ctx.arc(15, -15, 10, 0, 7); ctx.fill();
+        ctx.fillStyle = "#a1887f"; ctx.beginPath(); ctx.arc(0, 0, h.r, 0, 7); ctx.fill();
+        ctx.fillStyle = h.alive ? "#000" : "#f00"; ctx.beginPath(); ctx.arc(-7, -5, 3, 0, 7); ctx.arc(7, -5, 3, 0, 7); ctx.fill();
+        ctx.restore();
+    });
+
+    ctx.save();
+    if (ammoType === 'lipstick') {
+        ctx.translate(ball.x, ball.y); ctx.rotate(Math.atan2(ball.vy, ball.vx) + Math.PI/2);
+        ctx.fillStyle = '#333'; ctx.fillRect(-10, 0, 20, 25);
+        ctx.fillStyle = '#ff007f'; ctx.fillRect(-10, -15, 20, 15);
+    } else {
+        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, 7); ctx.fill();
+    }
+    ctx.restore();
+
+    update(); requestAnimationFrame(draw);
+}
+
+canvas.onmousedown = (e) => { if(!ball.active) ball.grab = true; };
+window.onmousemove = (e) => { if(ball.grab) { ball.x = e.clientX; ball.y = e.clientY; } };
+window.onmouseup = () => { if(ball.grab) { ball.grab = false; ball.active = true; ball.vx = (200-ball.x)*0.15; ball.vy = (groundY-100-ball.y)*0.15; } };
+draw();
+</script>
+</body>
+</html>
